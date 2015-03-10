@@ -41,14 +41,16 @@ define(function (require, exports, module) {
         UML                 = app.getModule("uml/UML");
 
     var CodeGenUtils        = require("CodeGenUtils"),
-        PHPPreferences     = require("PHPPreferences"),
-        PHPCodeGenerator   = require("PHPCodeGenerator");
+        PHPPreferences      = require("PHPPreferences"),
+        PHPCodeGenerator    = require("PHPCodeGenerator"),
+        PHPReverseEngineer  = require("PHPReverseEngineer");
 
     /**
      * Commands IDs
      */
     var CMD_PHP           = 'php',
         CMD_PHP_GENERATE  = 'php.generate',
+        CMD_PHP_REVERSE  = 'php.reverse',
         CMD_PHP_CONFIGURE = 'php.configure';
 
     /**
@@ -157,12 +159,14 @@ define(function (require, exports, module) {
     // Register Commands
     CommandManager.register("PHP",             CMD_PHP,           CommandManager.doNothing);
     CommandManager.register("Generate Code...", CMD_PHP_GENERATE,  _handleGenerate);
+    CommandManager.register("Reverse Engineer Code...", CMD_PHP_REVERSE,  _handleReverse);
     CommandManager.register("Configure...",     CMD_PHP_CONFIGURE, _handleConfigure);
 
     var menu, menuItem;
     menu = MenuManager.getMenu(Commands.TOOLS);
     menuItem = menu.addMenuItem(CMD_PHP);
     menuItem.addMenuItem(CMD_PHP_GENERATE);
+    menuItem.addMenuItem(CMD_PHP_REVERSE);
     menuItem.addMenuDivider();
     menuItem.addMenuItem(CMD_PHP_CONFIGURE);
 
