@@ -6,7 +6,11 @@ class myClass {
     /*
     */
     function myClassFunction() {
-
+        //}}}somecrazy stuff in here;
+        if ($something = $somethingelse) {
+            Here is something;
+        }
+       
     }
     /*
 

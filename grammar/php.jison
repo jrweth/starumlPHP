@@ -20,6 +20,7 @@
 ";"         return ";";
 [A-Za-z_][A-Za-z0-9_]*   return 'IDENTIFIER';
 <<EOF>>     return 'EOF';
+[^\s]*      return "MISC";
 /lex
 
 
@@ -110,7 +111,7 @@ classBodyDeclaration
     ; 
 
 classFunction
-	: docBlock 'FUNCTION' 'IDENTIFIER' '(' ')' '{' '}'
+	: docBlock 'FUNCTION' 'IDENTIFIER' '(' ')' '{' classFunctionBody '}'
 		{$$ = {
             'docBlock': $1,
             'functionName': $3
@@ -122,6 +123,39 @@ classFunction
         }
         }
 	;
+
+classFunctionBody
+    : %empty /* empty */
+    | classFunctionBodyPart1
+    ;
+
+classFunctionBodyPart1
+    : classFunctionBodyPart
+    | classFunctionBodyPart1 classFunctionBodyPart
+    ;
+
+classFunctionBodyPart
+    : '{' miscCode1 '}'
+    | miscCode
+    ;
+
+miscCode1
+    : %empty
+    | miscCode1 miscCode
+    ;
+
+miscCode
+    : 'CLASS'
+    | 'FUNCTION'
+    | 'NAMESPACE'
+    | 'NS_SEPARATOR'
+    | '('
+    | ')'
+    | ";"
+    | "IDENTIFIER"
+    | "MISC"
+    | docBlock
+    ; 
 
 docBlock
     : '/*' '*/'
