@@ -5,8 +5,8 @@
 \s+         /* skip whitespace */
 \n+         /* skip carriage returns */
 "//".*      /* skip single line comments */
-"/*"        return '/*';
-"*/"        return '*/';
+"/*"        return 'COMMENTBLOCKSTART';
+"*/"        return 'COMMENTBLOCKEND';
 "<?php"     return 'STARTPHP';
 "?>"        return 'ENDPHP';
 "class"     return 'CLASS';
@@ -18,6 +18,8 @@
 "{"         return "{";
 "}"         return "}";
 ";"         return ";";
+"@"         return "@";
+"*"         return "*";
 [A-Za-z_][A-Za-z0-9_]*   return 'IDENTIFIER';
 <<EOF>>     return 'EOF';
 [^\s]*      return "MISC";
@@ -152,13 +154,29 @@ miscCode
     | '('
     | ')'
     | ";"
+    | "@"
     | "IDENTIFIER"
     | "MISC"
     | docBlock
     ; 
 
 docBlock
-    : '/*' '*/'
+    : 'COMMENTBLOCKSTART' docBlockBody 'COMMENTBLOCKEND'
     	{ $$ = 'doc block'; }
 	;
 
+docBlockBody
+    : %empty
+    | docBlockBodyPart1
+    ;
+
+docBlockBodyPart1
+    : docBlockBodyPart
+    | docBlockBodyPart1 docBlockBodyPart
+    ;
+
+docBlockBodyPart
+    : '*' '@' 'IDENTIFIER' miscCode
+    | '*' '*'
+    | miscCode
+    ;

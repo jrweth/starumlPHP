@@ -12,8 +12,8 @@ class myClass {
         }
        
     }
-    /*
-
+    /**
+    * here is some descriptive stuff
     */
     function myClassFunctionTwo(){
 
