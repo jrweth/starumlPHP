@@ -5,8 +5,7 @@
 \s+         /* skip whitespace */
 \n+         /* skip carriage returns */
 "//".*      /* skip single line comments */
-"/*"        return 'COMMENTBLOCKSTART';
-"*/"        return 'COMMENTBLOCKEND';
+[/]\*([^*]|[\r\n]|(\*+([^*/]|[\r\n])))*\*[/]+ return 'COMMENTBLOCK';
 ['](?:[^'\\]|\\.)*[']  return 'QUOTED_STRING';
 ["](?:[^"\\]|\\.)*["]  return 'QUOTED_STRING';
 "<?php"     return 'STARTPHP';
@@ -43,7 +42,8 @@ public|private|protected return "VISIBILITY";
 
 file
   : STARTPHP fileSections EOF
-    { console.log($2); return $2; }
+    { console.log($2); return $2;
+    }
   | STARTPHP fileSections ENDPHP EOF
     {console.log($2); return $2; }
 ;
@@ -87,7 +87,7 @@ useDeclaration
     ;
 
 classDeclaration
-    : docBlock 'CLASS' 'IDENTIFIER' '{' classBodyDeclarations '}'
+    : 'COMMENTBLOCK' 'CLASS' 'IDENTIFIER' '{' classBodyDeclarations '}'
     	{$$ = {
             'docBlock'  : $1,
             'className' : $3,
@@ -129,7 +129,7 @@ classBodyDeclaration
             'type': 'function',
             'definition': $1
         }}
-    | docBlock classFunction
+    | 'COMMENTBLOCK'classFunction
         {$$ = {
             'type': 'function',
             'definition': $2,
@@ -140,7 +140,7 @@ classBodyDeclaration
             'type': 'attribute',
             'definition': $1,
         }}
-    | docBlock classAttribute
+    | 'COMMENTBLOCK' classAttribute
         {$$ = {
             'type': 'attribute',
             'definition': $2,
@@ -251,26 +251,6 @@ miscCode
     | "QUOTED_STRING"
     | "IDENTIFIER"
     | "MISC"
-    | docBlock
+    | "COMMENTBLOCK"
     ; 
 
-docBlock
-    : 'COMMENTBLOCKSTART' docBlockBody 'COMMENTBLOCKEND'
-    	{ $$ = $2}
-	;
-
-docBlockBody
-    : %empty { $$ = 'start' }
-    | docBlockBodyPart1 { $$ = $1 + ' part 1' }
-    ;
-
-docBlockBodyPart1
-    : docBlockBodyPart { $$ = $1 }      
-    | docBlockBodyPart1 docBlockBodyPart { $$ = $1 + ' ' + $2 }
-    ;
-
-docBlockBodyPart
-    : miscCode {$$ = $1}
-    | '}' {$$ = $1}
-    | '{' {$$ = $1}
-    ;
