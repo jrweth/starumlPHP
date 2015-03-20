@@ -7,11 +7,21 @@
 "//".*      /* skip single line comments */
 "/*"        return 'COMMENTBLOCKSTART';
 "*/"        return 'COMMENTBLOCKEND';
+['](?:[^'\\]|\\.)*[']  return 'QUOTED_STRING';
+["](?:[^"\\]|\\.)*["]  return 'QUOTED_STRING';
 "<?php"     return 'STARTPHP';
 "?>"        return 'ENDPHP';
+"use"       return 'USE';
+"as"        return 'AS';
 "class"     return 'CLASS';
 "function"  return 'FUNCTION';
+"static"    return 'STATIC';
+public|private|protected return "VISIBILITY";
 "namespace" return 'NAMESPACE';
+"$"         return '$';
+"!"         return '!';
+","         return ',';
+"="         return '=';
 "\\"        return 'NS_SEPARATOR';
 "("         return '(';
 ")"         return ')';
@@ -19,10 +29,12 @@
 "}"         return "}";
 ";"         return ";";
 "@"         return "@";
-"*"         return "*";
+['](\'|[^'])*['] return "QUOTED_STRING";
+
 [A-Za-z_][A-Za-z0-9_]*   return 'IDENTIFIER';
+[0-9]+(\.[0-9]+)? return 'NUMBER';
 <<EOF>>     return 'EOF';
-[^\s]*      return "MISC";
+[^\s]      return "MISC";
 /lex
 
 
@@ -50,14 +62,34 @@ fileSections
 
 fileSection
     : namespaceDeclaration
-    | useDeclarations
-    | class
+    | useDeclaration
+    | classDeclaration
     ;
 
-class
+namespaceDeclaration
+    : 'NAMESPACE' namespaceIdentifier ';'
+        {$$ = {'type': 'namespace', 'namespace': $2}}
+    ;
+
+namespaceIdentifier
+    : 'IDENTIFIER'
+        {$$ = $1;}
+    | namespaceIdentifier 'NS_SEPARATOR' 'IDENTIFIER'
+        {$$ = $1 + "\\" + $3;  }
+    ;
+
+
+useDeclaration
+    : 'USE' namespaceIdentifier ';'
+        {$$ = {'type': 'use', 'use': $2}}
+    | 'USE' namespaceIdentifier 'AS' 'IDENTIFIER' ';'
+        {$$ = {'type': 'use', 'use': $2, 'as': $4}}
+    ;
+
+classDeclaration
     : docBlock 'CLASS' 'IDENTIFIER' '{' classBodyDeclarations '}'
     	{$$ = {
-            'classDocBlock'  : $1,
+            'docBlock'  : $1,
             'className' : $3,
             'classBody' : $5
         }}
@@ -66,18 +98,6 @@ class
             'className' : $3,
             'classBody' : $5
         }}
-    ;
-
-namespaceDeclaration
-    : 'NAMESPACE' namespaceIdentifier ';'
-        {$$ = {'namespace': $2}}
-    ;
-
-namespaceIdentifier
-    : 'IDENTIFIER'
-        {$$ = $1;}
-    | namespaceIdentifier 'NS_SEPARATOR' 'IDENTIFIER'
-        {$$ = $1 + "\\" + $3;  }
     ;
 
 classBodyDeclarations
@@ -108,23 +128,90 @@ classBodyDeclaration
         {$$ = {
             'type': 'function',
             'definition': $1
-        }
-        }
+        }}
+    | docBlock classFunction
+        {$$ = {
+            'type': 'function',
+            'definition': $2,
+            'docBlock': $1
+        }}
+    | classAttribute
+        {$$ = {
+            'type': 'attribute',
+            'definition': $1,
+        }}
+    | docBlock classAttribute
+        {$$ = {
+            'type': 'attribute',
+            'definition': $2,
+            'docBlock': $1
+        }}
     ; 
 
 classFunction
-	: docBlock 'FUNCTION' 'IDENTIFIER' '(' ')' '{' classFunctionBody '}'
+	: cModifiers 'FUNCTION' 'IDENTIFIER' '(' paramList ')' '{' classFunctionBody '}'
 		{$$ = {
-            'docBlock': $1,
+            'modifiers': $1,
             'functionName': $3
         }
         }
-	| 'FUNCTION' 'IDENTIFIER' '(' ')' '{' '}'
+	| 'FUNCTION' 'IDENTIFIER' '(' paramList ')' '{' classFunctionBody  '}'
 		{$$ = {
             'functionName': $2
         }
         }
 	;
+
+paramList
+    : %empty
+    | param
+    | paramList ',' param
+    ;
+
+param
+    : '$' 'IDENTIFIER'
+    | namespaceIdentifier '$' 'IDENTIFIER'
+    | '$' 'IDENTIFIER' equivalence
+    | namespaceIdentifier '$' 'IDENTIFIER' equivalence
+    ;
+
+equivalence
+    : '=' primative
+    ;
+
+primative
+    : 'NUMBER'
+    | 'QUOTED_STRING'
+    ;
+
+classAttribute
+    : cModifiers '$' 'IDENTIFIER' ';'
+        {$$ = {
+            'name': $3,
+            'modifiers': $1,
+        }}
+    | '$' 'IDENTIFIER' ';'
+        {$$ = {
+            'name': $2
+        }}
+    ;
+
+cModifiers
+    : cModifier
+        {$$ = [$1]}
+    | cModifiers cModifier
+        {
+            $1.push($2);
+            $$ = $1;
+        }
+    ;
+
+cModifier
+    : 'VISIBILITY'
+        {$$ = $1}
+    | 'STATIC'
+        {$$ = $1}
+    ;
 
 classFunctionBody
     : %empty /* empty */
@@ -132,13 +219,12 @@ classFunctionBody
     ;
 
 classFunctionBodyPart1
-    : classFunctionBodyPart
-    | classFunctionBodyPart1 classFunctionBodyPart
-    ;
-
-classFunctionBodyPart
-    : '{' miscCode1 '}'
-    | miscCode
+    : miscCode
+    | classFunctionBodyPart1 miscCode
+    | classFunctionBodyPart1 '{' classFunctionBodyPart1 '}'
+    | classFunctionBodyPart1 '{' '}'
+    | '{' '}'
+    | '{' classFunctionBodyPart1 '}'
     ;
 
 miscCode1
@@ -148,13 +234,21 @@ miscCode1
 
 miscCode
     : 'CLASS'
+    | 'USE'
+    | 'AS'
     | 'FUNCTION'
     | 'NAMESPACE'
     | 'NS_SEPARATOR'
+    | "!"
     | '('
     | ')'
     | ";"
+    | "="
+    | ","
+    | "$"
     | "@"
+    | "NUMBER"
+    | "QUOTED_STRING"
     | "IDENTIFIER"
     | "MISC"
     | docBlock
@@ -162,21 +256,21 @@ miscCode
 
 docBlock
     : 'COMMENTBLOCKSTART' docBlockBody 'COMMENTBLOCKEND'
-    	{ $$ = 'doc block'; }
+    	{ $$ = $2}
 	;
 
 docBlockBody
-    : %empty
-    | docBlockBodyPart1
+    : %empty { $$ = 'start' }
+    | docBlockBodyPart1 { $$ = $1 + ' part 1' }
     ;
 
 docBlockBodyPart1
-    : docBlockBodyPart
-    | docBlockBodyPart1 docBlockBodyPart
+    : docBlockBodyPart { $$ = $1 }      
+    | docBlockBodyPart1 docBlockBodyPart { $$ = $1 + ' ' + $2 }
     ;
 
 docBlockBodyPart
-    : '*' '@' 'IDENTIFIER' miscCode
-    | '*' '*'
-    | miscCode
+    : miscCode {$$ = $1}
+    | '}' {$$ = $1}
+    | '{' {$$ = $1}
     ;
