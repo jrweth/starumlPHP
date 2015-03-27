@@ -36,8 +36,8 @@ define(function (require, exports, module) {
         FileUtils       = app.getModule("file/FileUtils"),
         Async           = app.getModule("utils/Async");
 
-
-    // Java Primitive Types
+    require("grammar/php");
+    // PHP Primitive Types
     var javaPrimitiveTypes = [
         "void",
         "byte",
@@ -66,7 +66,7 @@ define(function (require, exports, module) {
         "java.lang.Character"
     ];
 
-    // Java Collection Types
+    // PHP Collection Types
     var javaCollectionTypes = [
         "Collection",
         "Set",
@@ -83,18 +83,18 @@ define(function (require, exports, module) {
         "Queue"
     ];
 
-    // Java Collection Types (full names)
+    // PHP Collection Types (full names)
     var javaUtilCollectionTypes = _.map(javaCollectionTypes, function (c) { return "java.util." + c; });
 
     /**
-     * Java Code Analyzer
+     * PHP Code Analyzer
      * @constructor
      */
     function PHPCodeAnalyzer() {
 
         /** @member {type.UMLModel} */
         this._root = new type.UMLModel();
-        this._root.name = "JavaReverse";
+        this._root.name = "PHPReverse";
 
         /** @member {Array.<File>} */
         this._files = [];
@@ -145,15 +145,16 @@ define(function (require, exports, module) {
         var self = this,
             promise;
         console.log('analyzing php');
-/*
+        
         // Perform 1st Phase
         promise = this.performFirstPhase(options);
 
         // Perform 2nd Phase
+        /*
         promise.always(function () {
             self.performSecondPhase(options);
         });
-
+        */
         // Load To Project
         promise.always(function () {
             var writer = new Core.Writer();
@@ -165,9 +166,8 @@ define(function (require, exports, module) {
         // Generate Diagrams
         promise.always(function () {
             self.generateDiagrams(options);
-            console.log("[Java] done.");
+            console.log("[PHP] done.");
         });
-*/
         return promise;
     };
 
@@ -181,18 +181,19 @@ define(function (require, exports, module) {
      */
     PHPCodeAnalyzer.prototype.performFirstPhase = function (options) {
         var self = this;
+        console.log('first Phase');
         return Async.doSequentially(this._files, function (file) {
             var result = new $.Deferred();
             file.read({}, function (err, data, stat) {
                 if (!err) {
                     try {
-                        var ast = java7.parse(data);
+                        var ast = parser.parse(data);
                         self._currentCompilationUnit = ast;
                         self._currentCompilationUnit.file = file;
-                        self.translateCompilationUnit(options, self._root, ast);
+                        self.translateSections(options, self._root, ast);
                         result.resolve();
                     } catch (ex) {
-                        console.error("[Java] Failed to parse - " + file._name);
+                        console.error("[PHP] Failed to parse - " + file._name);
                         result.reject(ex);
                     }
                 } else {
@@ -648,27 +649,6 @@ define(function (require, exports, module) {
         return null;
     };
 
-    /**
-     * Translate Java CompilationUnit Node.
-     * @param {Object} options
-     * @param {type.Model} namespace
-     * @param {Object} compilationUnitNode
-     */
-    PHPCodeAnalyzer.prototype.translateCompilationUnit = function (options, namespace, compilationUnitNode) {
-        var _namespace = namespace,
-            i,
-            len;
-
-        if (compilationUnitNode["package"]) {
-            var _package = this.translatePackage(options, namespace, compilationUnitNode["package"]);
-            if (_package !== null) {
-                _namespace = _package;
-            }
-        }
-
-        // Translate Types
-        this.translateTypes(options, _namespace, compilationUnitNode.types);
-    };
 
     /**
      * Translate Type Nodes
@@ -676,23 +656,24 @@ define(function (require, exports, module) {
      * @param {type.Model} namespace
      * @param {Array.<Object>} typeNodeArray
      */
-    PHPCodeAnalyzer.prototype.translateTypes = function (options, namespace, typeNodeArray) {
+    PHPCodeAnalyzer.prototype.translateSections = function (options, namespace, fileSections) {
         var i, len;
-        if (typeNodeArray.length > 0) {
-            for (i = 0, len = typeNodeArray.length; i < len; i++) {
-                var typeNode = typeNodeArray[i];
-                switch (typeNode.node) {
-                case "Class":
-                    this.translateClass(options, namespace, typeNode);
+        if (fileSections.length > 0) {
+            for (i = 0, len = fileSections.length; i < len; i++) {
+                var section = fileSections[i];
+                console.log(section);
+                switch (section.type) {
+                case "class":
+                    this.translateClass(options, namespace, section);
                     break;
-                case "Interface":
-                    this.translateInterface(options, namespace, typeNode);
+                case "interface":
+                    this.translateInterface(options, namespace, section);
                     break;
-                case "Enum":
-                    this.translateEnum(options, namespace, typeNode);
+                case "use":
+                    //this.translateEnum(options, namespace, section);
                     break;
-                case "AnnotationType":
-                    this.translateAnnotationType(options, namespace, typeNode);
+                case "namespace":
+                    //this.translateAnnotationType(options, namespace, section);
                     break;
                 }
             }
@@ -700,7 +681,7 @@ define(function (require, exports, module) {
     };
 
     /**
-     * Translate Java Package Node.
+     * Translate PHP Package Node.
      * @param {Object} options
      * @param {type.Model} namespace
      * @param {Object} compilationUnitNode
@@ -733,8 +714,8 @@ define(function (require, exports, module) {
                 }
 
                 memberNode.compilationUnitNode = this._currentCompilationUnit;
-
-                switch (memberNode.node) {
+console.log(memberNode);
+                switch (memberNode.type) {
                 case "Field":
                     if (options.association) {
                         this.translateFieldAsAssociation(options, namespace, memberNode);
@@ -745,8 +726,8 @@ define(function (require, exports, module) {
                 case "Constructor":
                     this.translateMethod(options, namespace, memberNode, true);
                     break;
-                case "Method":
-                    this.translateMethod(options, namespace, memberNode);
+                case "function":
+                    this.translateMethod(options, namespace, memberNode.definition);
                     break;
                 case "EnumConstant":
                     this.translateEnumConstant(options, namespace, memberNode);
@@ -758,7 +739,7 @@ define(function (require, exports, module) {
 
 
     /**
-     * Translate Java Type Parameter Nodes.
+     * Translate PHP Type Parameter Nodes.
      * @param {Object} options
      * @param {type.Model} namespace
      * @param {Object} typeParameterNodeArray
@@ -783,23 +764,24 @@ define(function (require, exports, module) {
 
 
     /**
-     * Translate Java Class Node.
+     * Translate PHP Class Node.
      * @param {Object} options
      * @param {type.Model} namespace
      * @param {Object} compilationUnitNode
      */
     PHPCodeAnalyzer.prototype.translateClass = function (options, namespace, classNode) {
         var i, len, _class;
-
+        console.log('translating class');
         // Create Class
         _class = new type.UMLClass();
         _class._parent = namespace;
-        _class.name = classNode.name;
+        _class.name = classNode.className;
 
         // Access Modifiers
-        _class.visibility = this._getVisibility(classNode.modifiers);
+        _class.visibility = 'public'; //this._getVisibility(classNode.modifiers);
 
         // Abstract Class
+        /*
         if (_.contains(classNode.modifiers, "abstract")) {
             _class.isAbstract = true;
         }
@@ -809,13 +791,15 @@ define(function (require, exports, module) {
             _class.isFinalSpecialization = true;
             _class.isLeaf = true;
         }
+        */
 
-        // JavaDoc
-        if (classNode.comment) {
-            _class.documentation = classNode.comment;
+        // PHPDoc
+        if (classNode.docBlock) {
+            _class.documentation = classNode.docBlock;
         }
 
         namespace.ownedElements.push(_class);
+        /* 
 
         // Register Extends for 2nd Phase Translation
         if (classNode["extends"]) {
@@ -827,7 +811,6 @@ define(function (require, exports, module) {
             };
             this._extendPendings.push(_extendPending);
         }
-
         // - 1) 타입이 소스에 있는 경우 --> 해당 타입으로 Generalization 생성
         // - 2) 타입이 소스에 없는 경우 (e.g. java.util.ArrayList) --> 타입을 생성(어디에?)한 뒤 Generalization 생성
         // 모든 타입이 생성된 다음에 Generalization (혹은 기타 Relationships)이 연결되어야 하므로, 어딘가에 등록한 다음이 2nd Phase에서 처리.
@@ -848,12 +831,13 @@ define(function (require, exports, module) {
         this.translateTypeParameters(options, _class, classNode.typeParameters);
         // Translate Types
         this.translateTypes(options, _class, classNode.body);
+        */
         // Translate Members
-        this.translateMembers(options, _class, classNode.body);
+        this.translateMembers(options, _class, classNode.classBody);
     };
 
     /**
-     * Translate Java Interface Node.
+     * Translate PHP Interface Node.
      * @param {Object} options
      * @param {type.Model} namespace
      * @param {Object} interfaceNode
@@ -867,7 +851,7 @@ define(function (require, exports, module) {
         _interface.name = interfaceNode.name;
         _interface.visibility = this._getVisibility(interfaceNode.modifiers);
 
-        // JavaDoc
+        // PHPDoc
         if (interfaceNode.comment) {
             _interface.documentation = interfaceNode.comment;
         }
@@ -896,7 +880,7 @@ define(function (require, exports, module) {
     };
 
     /**
-     * Translate Java Enum Node.
+     * Translate PHP Enum Node.
      * @param {Object} options
      * @param {type.Model} namespace
      * @param {Object} enumNode
@@ -910,7 +894,7 @@ define(function (require, exports, module) {
         _enum.name = enumNode.name;
         _enum.visibility = this._getVisibility(enumNode.modifiers);
 
-        // JavaDoc
+        // PHPDoc
         if (enumNode.comment) {
             _enum.documentation = enumNode.comment;
         }
@@ -926,7 +910,7 @@ define(function (require, exports, module) {
     };
 
     /**
-     * Translate Java AnnotationType Node.
+     * Translate PHP AnnotationType Node.
      * @param {Object} options
      * @param {type.Model} namespace
      * @param {Object} annotationTypeNode
@@ -941,7 +925,7 @@ define(function (require, exports, module) {
         _annotationType.stereotype = "annotationType";
         _annotationType.visibility = this._getVisibility(annotationTypeNode.modifiers);
 
-        // JavaDoc
+        // PHPDoc
         if (annotationTypeNode.comment) {
             _annotationType.documentation = annotationTypeNode.comment;
         }
@@ -957,7 +941,7 @@ define(function (require, exports, module) {
     };
 
     /**
-     * Translate Java Field Node as UMLAssociation.
+     * Translate PHP Field Node as UMLAssociation.
      * @param {Object} options
      * @param {type.Model} namespace
      * @param {Object} fieldNode
@@ -975,7 +959,7 @@ define(function (require, exports, module) {
     };
 
     /**
-     * Translate Java Field Node as UMLAttribute.
+     * Translate PHP Field Node as UMLAttribute.
      * @param {Object} options
      * @param {type.Model} namespace
      * @param {Object} fieldNode
@@ -1018,7 +1002,7 @@ define(function (require, exports, module) {
                     this._addTag(_attribute, Core.TK_BOOLEAN, "transient", true);
                 }
 
-                // JavaDoc
+                // PHPDoc
                 if (fieldNode.comment) {
                     _attribute.documentation = fieldNode.comment;
                 }
@@ -1049,9 +1033,11 @@ define(function (require, exports, module) {
         var i, len,
             _operation = new type.UMLOperation();
         _operation._parent = namespace;
-        _operation.name = methodNode.name;
+        _operation.name = methodNode.functionName;
         namespace.operations.push(_operation);
-
+        console.log('translating method');
+        console.log(methodNode);
+/*
         // Modifiers
         _operation.visibility = this._getVisibility(methodNode.modifiers);
         if (_.contains(methodNode.modifiers, "static")) {
@@ -1078,7 +1064,7 @@ define(function (require, exports, module) {
             _operation.stereotype = "constructor";
         }
 
-        //Stuff to do here to grab the correct Javadoc and put it into parameters and return
+        //Stuff to do here to grab the correct PHPdoc and put it into parameters and return
         
         // Formal Parameters
         if (methodNode.parameters && methodNode.parameters.length > 0) {
@@ -1117,7 +1103,7 @@ define(function (require, exports, module) {
             }
         }
 
-        // JavaDoc
+        // PHPDoc
         if (methodNode.comment) {
             _operation.documentation = methodNode.comment;
         }
@@ -1129,6 +1115,7 @@ define(function (require, exports, module) {
 
         // Translate Type Parameters
         this.translateTypeParameters(options, _operation, methodNode.typeParameters);
+        */
     };
 
     /**
@@ -1142,7 +1129,7 @@ define(function (require, exports, module) {
         _literal._parent = namespace;
         _literal.name = enumConstantNode.name;
 
-        // JavaDoc
+        // PHPDoc
         if (enumConstantNode.comment) {
             _literal.documentation = enumConstantNode.comment;
         }

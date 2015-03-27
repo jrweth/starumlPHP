@@ -74,6 +74,8 @@ namespaceDeclaration
 namespaceIdentifier
     : 'IDENTIFIER'
         {$$ = $1;}
+    | 'NS_SEPARATOR' 'IDENTIFIER'
+        {$$ = "\\" + $2;}
     | namespaceIdentifier 'NS_SEPARATOR' 'IDENTIFIER'
         {$$ = $1 + "\\" + $3;  }
     ;
@@ -89,12 +91,14 @@ useDeclaration
 classDeclaration
     : 'COMMENTBLOCK' 'CLASS' 'IDENTIFIER' '{' classBodyDeclarations '}'
     	{$$ = {
+            'type'      : 'class',
             'docBlock'  : $1,
             'className' : $3,
             'classBody' : $5
         }}
     |  'CLASS' 'IDENTIFIER' '{' classBodyDeclarations '}'
     	{$$ = {
+            'type'      : 'class',
             'className' : $3,
             'classBody' : $5
         }}
@@ -108,17 +112,10 @@ classBodyDeclarations
 
 classBodyDeclarationl
     :   classBodyDeclaration
-        {
-            $$ = {
-                'functions': [],
-                'attributes': [],
-                'constants': []
-            };
-            $$[$1.type+'s'].push($1.definition);
-        }
+        { $$ = [$1];}
     |   classBodyDeclarationl classBodyDeclaration
         {
-            $1[$2.type+'s'].push($2.definition);
+            $1.push($2);
             $$ = $1;
         }
     ; 
